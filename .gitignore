@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------- 构建产物
+build/
+*/build/
+out/
+dist/
+.gradle/
+.gradle-home/
+.gh*/
+.pc*/
+*.class
+
+# jar 不入库，用 tools/fetch_libs.py 重新抓。
+# 例外：gradle wrapper 必须入库，否则 clone 下来没有 gradlew 可用。
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# ---------------------------------------------------------------- 本机配置
+local.properties
+*.hprof
+
+# ---------------------------------------------------------------- 随包资源
+# assets/ 里的字体是**产物也是源码**：tools/make_font.py 生成，但必须入库，
+# 否则没装 fonttools 的人 clone 下来直接就是一堆空白字。
+!assets/fonts/*.ttf
+!assets/fonts/*.txt
+
+# ---------------------------------------------------------------- 签名
+# keystore/gunmu-party.jks 是**项目固定签名**（a0.0.1 起），必须入库：
+# 丢了它，已安装的用户就永远无法升级（安卓不允许同包名换签名覆盖）。
+# ⚠️ 将来若要忽略别的密钥文件，**不要**用 `*.jks` / `*.keystore` 这类通配 ——
+#    那会把这一把也一起忽略掉，而 .gitignore 里的忽略是"静默"的。
+!keystore/*.jks
+!keystore/README.txt
+
+# ---------------------------------------------------------------- IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+
+# ---------------------------------------------------------------- 平台产物
+*.apk
+*.aab
+*.ap_
+*.dex
+android/libs/
+android/release/
+android/debug/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ---------------------------------------------------------------- 系统
+.DS_Store
+Thumbs.db
+desktop.ini

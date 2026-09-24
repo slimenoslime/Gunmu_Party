@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 图标底色：和游戏内深色 HUD 面板同色系 -->
+    <color name="ic_launcher_background">#1B2430</color>
+    <!-- 游戏窗口底色：和 3D 场景的雾/天空色接近，避免启动瞬间闪白 -->
+    <color name="gunmu_window_bg">#5C6E8C</color>
+</resources>

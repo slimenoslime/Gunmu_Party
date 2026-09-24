@@ -1,0 +1,77 @@
+// 《滚木派对》根构建脚本
+//
+// 模块职责：
+//   core    —— 全部游戏逻辑与渲染（平台无关），见 docs/05-TECH-ARCHITECTURE.md §2
+//   lwjgl3  —— 桌面入口（Windows / Linux / macOS）
+//   android —— 安卓入口（检测到 Android SDK 才纳入构建）
+//
+// 注意：这里刻意**不**对所有子项目统一 apply 'java-library'，
+// 因为 :android 需要 com.android.application，两者不能共存。
+
+// Android Gradle Plugin 的类路径。放在根脚本里，子项目自动继承。
+// 桌面端不需要它，但一起解析不会影响桌面构建。
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:${androidPluginVersion}"
+    }
+}
+
+allprojects {
+    group = 'top.gunmu'
+    // ⚠️ 版本号的**唯一来源**是 core/.../GameConfig.java 的 VERSION
+    //    （命名规范：a=alpha 内测版 / b=beta 测试版 / v=release 正式版）。
+    //    Gradle 只是本机可用时的备用路径（受限环境里它起不来，日常走 tools/build_*.py），
+    //    这里必须与 GameConfig.VERSION 一致 —— tools/version.py 每次构建都会核对并告警。
+    version = 'a0.0.2'
+
+    repositories {
+        // google() 必须在前：AGP 及其传递依赖只在 Google Maven 上有
+        google()
+        mavenCentral()
+        maven { url = 'https://oss.sonatype.org/content/repositories/snapshots/' }
+    }
+}
+
+subprojects {
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.compilerArgs << '-Xlint:-serial'
+    }
+    tasks.withType(Javadoc).configureEach {
+        options.encoding = 'UTF-8'
+    }
+}
+
+// ---------------------------------------------------------------- 顶层便捷任务
+
+tasks.register('runGame') {
+    group = 'gunmu'
+    description = '启动《滚木派对》桌面版'
+    dependsOn ':lwjgl3:run'
+}
+
+tasks.register('dist') {
+    group = 'gunmu'
+    description = '打出可独立运行的桌面 jar'
+    dependsOn ':lwjgl3:fatJar'
+}
+
+tasks.register('smoke') {
+    group = 'gunmu'
+    description = '无窗口冒烟测试（校验 10 张地图 + 跑完整局淘汰赛）'
+    dependsOn ':core:smokeTest'
+}
+
+tasks.register('apk') {
+    group = 'gunmu'
+    description = '构建 Android debug APK'
+    if (project.findProject(':android') != null) {
+        dependsOn ':android:assembleDebug'
+    } else {
+        doFirst { throw new GradleException('未检测到 Android SDK，无法构建 APK。请在 local.properties 里配置 sdk.dir') }
+    }
+}

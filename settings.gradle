@@ -1,0 +1,50 @@
+// 《滚木派对》多平台工程：core（全部逻辑）+ lwjgl3（Windows/Linux/macOS）+ android
+//
+// :android 只在检测到 Android SDK 时才纳入构建，否则桌面端完全不受影响。
+
+rootProject.name = 'gunmu-party'
+
+include 'core'
+include 'lwjgl3'
+
+// ---------------------------------------------------------------- Android SDK 探测
+def detectAndroidSdk() {
+    def candidates = []
+    def env = System.getenv('ANDROID_HOME')
+    if (env) candidates << env
+    env = System.getenv('ANDROID_SDK_ROOT')
+    if (env) candidates << env
+
+    def lp = new File(rootDir, 'local.properties')
+    if (lp.exists()) {
+        def props = new Properties()
+        lp.withInputStream { props.load(it) }
+        def sdk = props.getProperty('sdk.dir')
+        if (sdk) candidates << sdk
+    }
+
+    def home = System.getProperty('user.home')
+    candidates << "$home/AppData/Local/Android/Sdk".replace('\\', '/')
+    candidates << "${rootDir}/android-sdk"
+    candidates << '/usr/local/android-sdk'
+    candidates << "$home/Library/Android/sdk"
+
+    for (String c : candidates) {
+        if (!c) continue
+        def dir = new File(c)
+        if (dir.isDirectory() && new File(dir, 'platforms').isDirectory()) {
+            return dir.absolutePath
+        }
+    }
+    return null
+}
+
+ext.androidSdkDir = detectAndroidSdk()
+
+if (ext.androidSdkDir != null) {
+    include 'android'
+    println "[gunmu] 检测到 Android SDK：${ext.androidSdkDir} —— 已纳入 :android 模块"
+} else {
+    println "[gunmu] 未检测到 Android SDK，跳过 :android 模块（桌面版不受影响）。"
+    println "        想构建 APK：在 local.properties 里写 sdk.dir=<你的 Android SDK 路径>"
+}

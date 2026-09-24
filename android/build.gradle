@@ -1,0 +1,152 @@
+// android = 安卓入口。只在检测到 Android SDK 时才被 settings.gradle 纳入构建。
+//
+// 组合版本：AGP 8.11.1 + Gradle 8.13 + compileSdk 36 + JDK 17 目标
+
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'top.gunmu.party.android'
+    compileSdk Integer.parseInt(androidCompileSdk)
+    buildToolsVersion androidBuildTools
+
+    defaultConfig {
+        applicationId 'top.gunmu.party'
+        minSdk Integer.parseInt(androidMinSdk)
+        targetSdk Integer.parseInt(androidTargetSdk)
+        versionCode 2
+        versionName project.version
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src/main/java']
+            res.srcDirs = ['src/main/res']
+            assets.srcDirs = [rootProject.file('assets').path]
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+            // 调试包也用固定签名：不然设备上会同时存在"两种身份"的同名应用，
+            // 覆盖升级时报 INSTALL_FAILED_UPDATE_INCOMPATIBLE（见 keystore/README.txt）。
+            signingConfig signingConfigs.fixed
+        }
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.fixed
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
+                    'proguard-rules.pro'
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/robovm/ios/robovm.xml', 'META-INF/DEPENDENCIES',
+                         'META-INF/LICENSE*', 'META-INF/NOTICE*']
+        }
+    }
+
+    signingConfigs {
+        /**
+         * 项目**固定签名**（从 a0.0.1 起）。
+         *
+         * 为什么不再用 AGP 默认的 debug key：`~/.android/debug.keystore` 是每台机器
+         * 各自生成的，用它签出来的包在别人机器上装不上（同包名签名不同），
+         * 而 debug keystore 本身也不该作为长期分发的身份。
+         *
+         * 签名本体在 `keystore/gunmu-party.jks`（入库目录，密码见 keystore/README.txt）。
+         * ⚠️ 丢了它 = 已安装用户永远无法升级，所以它必须进版本控制和备份。
+         *
+         * 想临时换一把：-Pgunmu.keystore=<绝对路径> -Pgunmu.ksAlias=<别名>
+         *             -Pgunmu.ksPass=<密码> -Pgunmu.ksKeyPass=<密码>
+         */
+        fixed {
+            storeFile rootProject.file('keystore/gunmu-party.jks')
+            storePassword project.findProperty('gunmu.ksPass') ?: 'gunmu-party'
+            keyAlias project.findProperty('gunmu.ksAlias') ?: 'gunmu-party'
+            keyPassword project.findProperty('gunmu.ksKeyPass') ?: 'gunmu-party'
+            if (project.hasProperty('gunmu.keystore')) {
+                storeFile file(project.property('gunmu.keystore'))
+            }
+        }
+        debug {
+            // 允许把 debug keystore 指到别处（CI / 受限环境里 ~/.android 不可写时用）。
+            // 传法：-Pgunmu.debugKeystore=<绝对路径>
+            if (project.hasProperty('gunmu.debugKeystore')) {
+                storeFile = file(project.property('gunmu.debugKeystore'))
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- 原生库
+
+configurations {
+    natives
+}
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-android:${gdxVersion}"
+
+    natives "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-armeabi-v7a"
+    natives "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-arm64-v8a"
+    natives "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-x86"
+    natives "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-x86_64"
+
+    natives "com.badlogicgames.gdx:gdx-freetype-platform:${gdxVersion}:natives-armeabi-v7a"
+    natives "com.badlogicgames.gdx:gdx-freetype-platform:${gdxVersion}:natives-arm64-v8a"
+    natives "com.badlogicgames.gdx:gdx-freetype-platform:${gdxVersion}:natives-x86"
+    natives "com.badlogicgames.gdx:gdx-freetype-platform:${gdxVersion}:natives-x86_64"
+}
+
+/** 把 4 个 ABI 的 .so 从 Maven 的 natives jar 里解到 android/libs/<abi>/。 */
+tasks.register('copyAndroidNatives') {
+    group = 'gunmu'
+    description = '把 libGDX 原生库解到 android/libs'
+    doFirst {
+        ['armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'].each { abi ->
+            file("libs/${abi}").mkdirs()
+        }
+        configurations.natives.files.each { jar ->
+            def abi = null
+            if (jar.name.endsWith('natives-armeabi-v7a.jar')) abi = 'armeabi-v7a'
+            else if (jar.name.endsWith('natives-arm64-v8a.jar')) abi = 'arm64-v8a'
+            else if (jar.name.endsWith('natives-x86.jar')) abi = 'x86'
+            else if (jar.name.endsWith('natives-x86_64.jar')) abi = 'x86_64'
+            if (abi != null) {
+                copy {
+                    from zipTree(jar)
+                    into file("libs/${abi}")
+                    include '*.so'
+                }
+            }
+        }
+        logger.lifecycle("[gunmu] 原生库已解包到 android/libs/")
+    }
+}
+
+// AGP 8 的原生库合并任务名带 merge + JniLibFolders
+tasks.matching { it.name.contains('merge') && it.name.contains('JniLibFolders') }
+        .configureEach { it.dependsOn(copyAndroidNatives) }
+tasks.matching { it.name.contains('merge') && it.name.contains('NativeLibs') }
+        .configureEach { it.dependsOn(copyAndroidNatives) }
+
+tasks.register('cleanNatives', Delete) {
+    group = 'gunmu'
+    delete 'libs'
+}

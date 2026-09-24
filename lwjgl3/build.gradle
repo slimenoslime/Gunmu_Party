@@ -1,0 +1,52 @@
+// lwjgl3 = 桌面入口（Windows / Linux / macOS）
+
+apply plugin: 'application'
+apply plugin: 'java-library'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    implementation project(':core')
+    implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:${gdxVersion}"
+    runtimeOnly "com.badlogicgames.gdx:gdx-platform:${gdxVersion}:natives-desktop"
+    runtimeOnly "com.badlogicgames.gdx:gdx-freetype-platform:${gdxVersion}:natives-desktop"
+}
+
+application {
+    mainClass = 'top.gunmu.party.lwjgl3.Lwjgl3Launcher'
+}
+
+sourceSets.main.resources.srcDirs += [rootProject.file('assets').path]
+
+run {
+    // assets/ 作为工作目录，和打包后的行为一致
+    workingDir = rootProject.file('assets')
+    ignoreExitValue = true
+    if (System.getProperty('os.name').toLowerCase().contains('mac')) {
+        jvmArgs += ['-XstartOnFirstThread']
+    }
+}
+
+// 打出单文件可执行 jar：java -jar gunmu-party.jar
+tasks.register('fatJar', Jar) {
+    group = 'gunmu'
+    description = '打包成可独立运行的 fat jar'
+    archiveFileName = 'gunmu-party.jar'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'Main-Class': application.mainClass.get(),
+                   'Implementation-Title': 'Gunmu Party',
+                   'Implementation-Version': project.version
+    }
+    from sourceSets.main.output
+    from project(':core').sourceSets.main.output
+    from rootProject.file('assets')
+    dependsOn configurations.runtimeClasspath
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', 'module-info.class'
+}

@@ -1,0 +1,26 @@
+// core = 平台无关的全部游戏逻辑与渲染
+// Windows / Android / 将来任何平台都共用这一份
+// 见 docs/05-TECH-ARCHITECTURE.md §2
+
+apply plugin: 'java-library'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    api "com.badlogicgames.gdx:gdx:${gdxVersion}"
+    // 中文渲染：FreeType 在桌面与 Android 都由各自的 platform 包提供原生库
+    api "com.badlogicgames.gdx:gdx-freetype:${gdxVersion}"
+}
+
+// ---- 无窗口冒烟测试：校验地图 + 跑完整局淘汰赛，不需要 OpenGL ----
+tasks.register('smokeTest', JavaExec) {
+    group = 'gunmu'
+    description = '无窗口冒烟测试'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'top.gunmu.party.tools.SmokeTest'
+    jvmArgs = ['-Dfile.encoding=UTF-8']
+    standardOutput = System.out
+}
